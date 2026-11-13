@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shift Roster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#EDF0F4; --surface:#FFFFFF; --ink:#18202E; --muted:#5D6778; --line:#D5DAE2;
+  --m:#F2C14E; --m-ink:#3B2C00;
+  --e:#E8743B; --e-ink:#FFFFFF;
+  --e1:#B84E22; --e1-ink:#FFFFFF;
+  --n:#2B2D6E; --n-ink:#E6E7FF;
+  --off:#D9DEE6; --off-ink:#4A5363;
+  --al:#2F9C8C; --al-ink:#FFFFFF;
+  --focus:#2B2D6E;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121620; --surface:#1B2130; --ink:#E8ECF3; --muted:#9AA4B5; --line:#2C3445;
+    --n:#5357C9; --n-ink:#FFFFFF; --off:#2C3445; --off-ink:#B7C0CF; --focus:#F2C14E;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121620; --surface:#1B2130; --ink:#E8ECF3; --muted:#9AA4B5; --line:#2C3445;
+  --n:#5357C9; --n-ink:#FFFFFF; --off:#2C3445; --off-ink:#B7C0CF; --focus:#F2C14E;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:6px}
+
+/* Picker */
+.picker{position:relative;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.picker label{font-weight:600;color:var(--muted);font-size:.9rem}
+.search{flex:1;min-width:220px;position:relative}
+.search input{width:100%;font:inherit;font-size:1.05rem;padding:12px 14px;border-radius:12px;
+  border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
+.list{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 6px);background:var(--surface);
+  border:1.5px solid var(--line);border-radius:12px;max-height:320px;overflow:auto;display:none;
+  box-shadow:0 12px 32px rgba(10,15,30,.18)}
+.list.open{display:block}
+.list button{display:flex;justify-content:space-between;width:100%;text-align:left;font:inherit;
+  padding:10px 14px;border:0;background:none;color:var(--ink);cursor:pointer}
+.list button:hover,.list button.active{background:var(--bg)}
+.list small{color:var(--muted)}
+
+/* Hero */
+.hero{margin-top:28px}
+.month{color:var(--muted);font-weight:600}
+.name{font-size:clamp(2rem,6vw,3.6rem);line-height:1.05;font-weight:800;letter-spacing:-.02em;margin:4px 0 10px}
+.today{font-size:1.15rem;color:var(--muted)}
+.today b{color:var(--ink)}
+
+/* Sky strip: the signature element */
+.sky{margin-top:24px;display:grid;gap:3px;height:120px;align-items:end}
+.bar{border:0;padding:0;cursor:pointer;border-radius:5px 5px 2px 2px;position:relative;height:100%;
+  transition:transform .15s ease}
+.bar.c-OFF{height:28%}
+.bar.c-AL{height:55%}
+.bar.c-M{height:70%}
+.bar.c-E,.bar.c-E1{height:85%}
+.bar.c-N{height:100%}
+.bar.sel{outline:3px solid var(--ink);outline-offset:2px}
+.bar.is-today::after{content:"";position:absolute;left:50%;bottom:-11px;width:6px;height:6px;
+  border-radius:50%;background:var(--ink);transform:translateX(-50%)}
+.skyaxis{display:grid;gap:3px;margin-top:14px;
+  font-size:.7rem;color:var(--muted);text-align:center}
+.skyaxis span.we{font-weight:800;color:var(--ink)}
+
+/* Colors */
+.c-M{background:var(--m);color:var(--m-ink)}
+.c-E{background:var(--e);color:var(--e-ink)}
+.c-E1{background:var(--e1);color:var(--e1-ink)}
+.c-N{background:var(--n);color:var(--n-ink)}
+.c-OFF{background:var(--off);color:var(--off-ink)}
+.c-AL{background:var(--al);color:var(--al-ink)}
+
+/* Mix bar */
+.mix{margin-top:34px}
+.mix h2,.section h2{font-size:1.25rem;margin:0 0 10px;font-weight:800}
+.mixbar{display:flex;height:16px;border-radius:999px;overflow:hidden;background:var(--off)}
+.mixbar span{display:block;height:100%}
+.mixlegend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:.95rem}
+.mixlegend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.mixlegend b{font-weight:800}
+
+/* Layout */
+.cols{display:grid;grid-template-columns:1.35fr 1fr;gap:28px;margin-top:36px}
+@media (max-width:760px){.cols{grid-template-columns:1fr}}
+.section{background:var(--surface);border:1.5px solid var(--line);border-radius:18px;padding:18px}
+
+/* Calendar */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.dow{font-size:.75rem;color:var(--muted);text-align:center;font-weight:600;padding-bottom:4px}
+.dow.we{color:var(--ink);font-weight:800}
+.cell{aspect-ratio:1/1;border:0;border-radius:10px;font:inherit;cursor:pointer;
+  display:flex;flex-direction:column;justify-content:space-between;padding:6px 7px;text-align:left;min-width:0}
+.cell .d{font-size:.8rem;opacity:.85}
+.cell .s{font-weight:800;font-size:clamp(.8rem,2.6vw,1.05rem)}
+.cell.sel{outline:3px solid var(--ink);outline-offset:2px}
+.cell.is-today .d{text-decoration:underline;text-underline-offset:3px;font-weight:800;opacity:1}
+.blank{visibility:hidden}
+
+/* Day detail */
+.dayhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pill{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:800;font-size:.9rem}
+.crew h3{font-size:.95rem;margin:16px 0 6px;color:var(--muted);font-weight:600}
+.crew ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.crew li{padding:4px 10px;border-radius:8px;background:var(--bg);font-size:.9rem}
+.crew li.me{background:var(--ink);color:var(--surface);font-weight:600}
+.crew li button{all:unset;cursor:pointer}
+
+/* Upcoming */
+.up{margin-top:28px}
+.uplist{list-style:none;margin:0;padding:0}
+.uplist li{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.uplist li:last-child{border-bottom:0}
+.uplist .when{width:92px;flex:none;color:var(--muted)}
+.uplist .when b{color:var(--ink)}
+.chip{padding:3px 10px;border-radius:8px;font-weight:800;font-size:.85rem;min-width:44px;text-align:center}
+
+.foot{margin-top:28px;color:var(--muted);font-size:.85rem}
+.empty{color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:520px){.sky{height:90px;gap:2px}.skyaxis{gap:2px;font-size:.6rem}.skyaxis span:nth-child(even){visibility:hidden}}
+.c-X{background:var(--bg);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.bar.c-X{height:40%}
+.loader{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px;font-size:.9rem;color:var(--muted)}
+.btn{font:inherit;font-weight:600;padding:9px 14px;border-radius:10px;border:1.5px solid var(--line);
+  background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.status.err{color:var(--e1)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="picker">
+    <label for="q">Employee</label>
+    <div class="search">
+      <input id="q" type="text" autocomplete="off" placeholder="Type or pick a name" role="combobox" aria-expanded="false" aria-controls="list">
+      <div class="list" id="list" role="listbox"></div>
+    </div>
+  </div>
+
+  <div id="app"></div>
+
+  <div class="loader">
+    <span class="status" id="status">Loading roster…</span>
+  </div>
+  <p class="foot">Codes: M morning, E evening, E1 evening (E1), N night, OFF day off, A/L annual leave. Fridays and Saturdays are shown in bold.</p>
+</div>
+
+<script>
+/* ===== Settings ===== */
+const ROSTER_FILE = "roster.xlsx";   // put the Excel file next to this page with this exact name
+
+const INFO = {
+  M:{label:"Morning", cls:"M"}, E:{label:"Evening", cls:"E"}, E1:{label:"Evening (E1)", cls:"E1"},
+  N:{label:"Night", cls:"N"}, OFF:{label:"Day off", cls:"OFF"}, "A/L":{label:"Annual leave", cls:"AL"}
+};
+const ORDER = ["M","E","E1","N","OFF","A/L"];
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+
+let YEAR, MONTH, DAYS, NAMES = [], DATA = {}, MONTHNAME = "", TODAY = null;
+
+/* ===== Excel reading ===== */
+function normCode(v){
+  let s = String(v ?? "").trim().toUpperCase().replace(/\s+/g,"");
+  if (!s) return "";
+  if (s==="AL" || s==="A/L" || s==="A\\L" || s==="A.L") return "A/L";
+  if (s==="O" || s==="OF") return "OFF";
+  return s;
+}
+function monthFrom(v){
+  if (v instanceof Date) return v.getMonth();
+  const s = String(v ?? "").trim().toLowerCase();
+  if (/^\d{1,2}$/.test(s)) { const n=+s; if(n>=1&&n<=12) return n-1; }
+  const i = MONTHS.indexOf(s.slice(0,3));
+  return i>=0 ? i : null;
+}
+function dayFrom(v){
+  if (v instanceof Date) return v.getDate();
+  const s = String(v ?? "").trim();
+  let m = s.match(/^[A-Za-z]{2,9}\.?\s*(\d{1,2})$/) || s.match(/^(\d{1,2})$/) || s.match(/^(\d{1,2})\s*[A-Za-z]{2,9}$/);
+  return m ? +m[1] : null;
+}
+function valueAfter(rows, re){
+  for (const r of rows.slice(0,15)) for (let c=0;c<r.length;c++){
+    if (re.test(String(r[c]).trim())) for (let k=c+1;k<r.length;k++) if (String(r[k]).trim()!=="") return r[k];
+  }
+  return null;
+}
+function parseWorkbook(wb){
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
+
+  // header row: the one containing "Employee"
+  let hr=-1, nameCol=0;
+  for (let r=0;r<rows.length && hr<0;r++) rows[r].forEach((v,c)=>{ if(hr<0 && /^employee/i.test(String(v).trim())){hr=r;nameCol=c;} });
+  if (hr<0) throw new Error("Couldn’t find the “Employee” header row in the Excel file.");
+
+  // day columns
+  const dayCols = [];
+  rows[hr].forEach((v,c)=>{ if(c>nameCol){ const d=dayFrom(v); if(d && d<=31) dayCols.push({c,d}); } });
+  if (!dayCols.length) throw new Error("Couldn’t find the day columns (like “Sun 01”).");
+
+  // year & month from the top of the sheet, fall back to today
+  const now = new Date();
+  let y = parseInt(valueAfter(rows,/^year$/i)); if (!(y>2000 && y<2100)) y = now.getFullYear();
+  let m = monthFrom(valueAfter(rows,/^month$/i)); if (m===null) m = now.getMonth();
+  const days = new Date(y,m+1,0).getDate();
+
+  // employees: rows below the header whose cells are mostly shift codes
+  const data = {}, names = [];
+  for (let r=hr+1;r<rows.length;r++){
+    const name = String(rows[r][nameCol] ?? "").replace(/\s+/g," ").trim();
+    if (!name) continue;
+    const arr = Array(days).fill("");
+    let filled = 0;
+    dayCols.forEach(({c,d})=>{ if(d<=days){ const code=normCode(rows[r][c]); arr[d-1]=code; if(code) filled++; } });
+    if (filled < days/2) continue;           // skip totals or notes rows
+    let key = name, n = 2; while (data[key]) key = name+" ("+(n++)+")";
+    data[key]=arr; names.push(key);
+  }
+  if (!names.length) throw new Error("Found the header but no employee rows under it.");
+  return {year:y, month:m, names, data};
+}
+function useRoster(r){
+  YEAR=r.year; MONTH=r.month; NAMES=r.names; DATA=r.data;
+  DAYS=new Date(YEAR,MONTH+1,0).getDate();
+  MONTHNAME=new Date(YEAR,MONTH,1).toLocaleString("en",{month:"long"});
+  const now=new Date();
+  TODAY=(now.getFullYear()===YEAR && now.getMonth()===MONTH) ? now.getDate() : null;
+  if (state.name && !DATA[state.name]) state.name=null;
+  state.day = TODAY || 1;
+  q.value = state.name || "";
+  render();
+}
+function setStatus(t, err){ const s=document.getElementById("status"); s.textContent=t; s.classList.toggle("err",!!err); }
+function cache(r){ try{ localStorage.setItem("roster-data", JSON.stringify(r)); }catch(e){} }
+function cached(){ try{ return JSON.parse(localStorage.getItem("roster-data")); }catch(e){ return null; } }
+
+async function loadDefault(){
+  if (typeof XLSX==="undefined"){ setStatus("The Excel reader didn’t load. Check your internet connection.",true); return showCachedOrEmpty(); }
+  try{
+    const res = await fetch(ROSTER_FILE+"?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error("not found");
+    const r = parseWorkbook(XLSX.read(await res.arrayBuffer(),{type:"array"}));
+    cache(r); useRoster(r);
+    setStatus(`Loaded ${ROSTER_FILE}: ${MONTHNAME} ${YEAR}, ${NAMES.length} people.`);
+  }catch(e){
+    const msg = e.message==="not found" || e instanceof TypeError
+      ? `Couldn’t open ${ROSTER_FILE} next to this page.` : e.message;
+    showCachedOrEmpty(msg);
+  }
+}
+function showCachedOrEmpty(msg){
+  const r = cached();
+  if (r){ useRoster(r); setStatus((msg?msg+" ":"")+`Showing the last saved roster (${MONTHNAME} ${YEAR}).`, !!msg); }
+  else { setStatus(msg || "No roster loaded yet.", !!msg); render(); }
+}
+
+/* ===== Page ===== */
+const dowOf = d => new Date(YEAR,MONTH,d).getDay();
+const isWE = d => [5,6].includes(dowOf(d));
+const info = c => INFO[c] || (c ? {label:c, cls:"X"} : {label:"Not set", cls:"X"});
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+const isWork = c => !!c && c!=="OFF" && c!=="A/L";
+
+let state = { name:null, day:1 };
+try { state.name = localStorage.getItem("roster-name"); } catch(e){}
+
+const q = document.getElementById("q"), list = document.getElementById("list"), app = document.getElementById("app");
+
+function renderList(filter=""){
+  const f = filter.toLowerCase();
+  const hits = NAMES.filter(n => n.toLowerCase().includes(f));
+  list.innerHTML = hits.length ? hits.map((n,i)=>{
+    const c = TODAY ? DATA[n][TODAY-1] : "";
+    return `<button type="button" role="option" data-name="${esc(n)}" class="${i===0?"active":""}"><span>${esc(n)}</span>${TODAY?`<small>Today: ${esc(info(c).label)}</small>`:""}</button>`;
+  }).join("") : `<div style="padding:12px 14px" class="empty">${NAMES.length?`No name matches “${esc(filter)}”.`:"No roster loaded yet."}</div>`;
+}
+function openList(){ renderList(q.value === state.name ? "" : q.value); list.classList.add("open"); q.setAttribute("aria-expanded","true"); }
+function closeList(){ list.classList.remove("open"); q.setAttribute("aria-expanded","false"); }
+q.addEventListener("focus", ()=>{ q.select(); openList(); });
+q.addEventListener("input", ()=>{ renderList(q.value); list.classList.add("open"); });
+q.addEventListener("keydown", e=>{
+  const btns=[...list.querySelectorAll("button")]; let i=btns.findIndex(b=>b.classList.contains("active"));
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); if(!btns.length)return;
+    btns[i]?.classList.remove("active"); i = e.key==="ArrowDown" ? (i+1)%btns.length : (i-1+btns.length)%btns.length;
+    btns[i].classList.add("active"); btns[i].scrollIntoView({block:"nearest"}); }
+  if(e.key==="Enter"){ const b=btns[i]; if(b) choose(b.dataset.name); }
+  if(e.key==="Escape"){ closeList(); q.blur(); }
+});
+list.addEventListener("mousedown", e=>{ const b=e.target.closest("button"); if(b){ e.preventDefault(); choose(b.dataset.name); } });
+document.addEventListener("click", e=>{ if(!e.target.closest(".search")) closeList(); });
+
+function choose(n){
+  state.name = n; q.value = n; closeList(); q.blur();
+  try { localStorage.setItem("roster-name", n); } catch(e){}
+  render();
+}
+function nextWork(arr, from){ for(let d=from; d<=DAYS; d++) if(isWork(arr[d-1])) return d; return null; }
+
+function render(){
+  if(!NAMES.length){
+    app.innerHTML = `<div class="hero"><div class="name">No roster yet</div>
+      <div class="today">Upload <b>${ROSTER_FILE}</b> next to this page on GitHub.</div></div>`;
+    return;
+  }
+  if(!state.name || !DATA[state.name]){
+    app.innerHTML = `<div class="hero"><div class="month">${MONTHNAME} ${YEAR}</div>
+      <div class="name">Pick a name to see their month</div>
+      <div class="today">${NAMES.length} people on this roster. Start typing above.</div></div>`;
+    return;
+  }
+  const arr = DATA[state.name];
+  const codes = [...ORDER, ...new Set(arr.filter(c=>c && !ORDER.includes(c)))];
+  const counts = {}; arr.forEach(c=>{ if(c) counts[c]=(counts[c]||0)+1; });
+  const work = arr.filter(isWork).length;
+
+  let todayLine;
+  if (TODAY){
+    const c = arr[TODAY-1], nxt = nextWork(arr, TODAY+1);
+    todayLine = `Today: <b>${esc(info(c).label)}</b>` + (nxt ? `. Next shift: <b>${esc(info(arr[nxt-1]).label)}</b> on ${DOW[dowOf(nxt)]} ${nxt}.` : ".");
+  } else todayLine = `${work} working days this month.`;
+
+  const cols = `grid-template-columns:repeat(${DAYS},1fr)`;
+  const sky = arr.map((c,i)=>{ const d=i+1; return `<button class="bar c-${info(c).cls}${d===state.day?" sel":""}${d===TODAY?" is-today":""}" data-day="${d}" title="${DOW[dowOf(d)]} ${d}: ${esc(info(c).label)}" aria-label="${DOW[dowOf(d)]} ${d}, ${esc(info(c).label)}"></button>`; }).join("");
+  const axis = arr.map((c,i)=>`<span class="${isWE(i+1)?"we":""}">${i+1}</span>`).join("");
+
+  const mixbar = codes.filter(k=>counts[k]).map(k=>`<span class="c-${info(k).cls}" style="width:${counts[k]/DAYS*100}%" title="${esc(info(k).label)}: ${counts[k]}"></span>`).join("");
+  const mixlegend = codes.filter(k=>counts[k]).map(k=>`<span><i class="c-${info(k).cls}"></i>${esc(info(k).label)} <b>${counts[k]}</b></span>`).join("");
+
+  let cal = DOW.map((d,i)=>`<div class="dow${i>=5?" we":""}">${d}</div>`).join("");
+  for(let i=0;i<dowOf(1);i++) cal += `<div class="cell blank"></div>`;
+  arr.forEach((c,i)=>{ const d=i+1;
+    cal += `<button class="cell c-${info(c).cls}${d===state.day?" sel":""}${d===TODAY?" is-today":""}" data-day="${d}" aria-label="${DOW[dowOf(d)]} ${d}, ${esc(info(c).label)}"><span class="d">${d}</span><span class="s">${esc(c||"–")}</span></button>`;
+  });
+
+  const d = state.day, myc = arr[d-1];
+  const groups = {}; NAMES.forEach(n=>{ const c=DATA[n][d-1]; (groups[c]=groups[c]||[]).push(n); });
+  const gkeys = [...ORDER, ...Object.keys(groups).filter(k=>!ORDER.includes(k))];
+  const crew = gkeys.filter(k=>groups[k]).map(k=>`
+    <h3>${esc(info(k).label)} (${groups[k].length})</h3>
+    <ul>${groups[k].map(n=>`<li class="${n===state.name?"me":""}">${n===state.name?esc(n):`<button type="button" data-name="${esc(n)}">${esc(n)}</button>`}</li>`).join("")}</ul>`).join("");
+
+  const start = TODAY || 1;
+  let up = "";
+  for(let k=start; k<Math.min(start+7, DAYS+1); k++){
+    const c = arr[k-1];
+    const mates = isWork(c) ? NAMES.filter(n=>n!==state.name && DATA[n][k-1]===c).length : null;
+    up += `<li><span class="when"><b>${DOW[dowOf(k)]} ${k}</b>${k===TODAY?" today":""}</span>
+      <span class="chip c-${info(c).cls}">${esc(c||"–")}</span>
+      <span>${esc(info(c).label)}${mates!==null?`<span class="empty">, with ${mates} other${mates===1?"":"s"}</span>`:""}</span></li>`;
+  }
+  const extra = [counts.OFF?`${counts.OFF} off`:"", counts["A/L"]?`${counts["A/L"]} on leave`:""].filter(Boolean).join(", ");
+
+  app.innerHTML = `
+  <div class="hero">
+    <div class="month">${MONTHNAME} ${YEAR}</div>
+    <h1 class="name">${esc(state.name)}</h1>
+    <div class="today">${todayLine}</div>
+  </div>
+  <div class="sky" style="${cols}" role="group" aria-label="Month at a glance: taller bars are later shifts">${sky}</div>
+  <div class="skyaxis" style="${cols}" aria-hidden="true">${axis}</div>
+  <div class="mix">
+    <h2>${work} working days${extra?", "+extra:""}</h2>
+    <div class="mixbar">${mixbar}</div>
+    <div class="mixlegend">${mixlegend}</div>
+  </div>
+  <div class="cols">
+    <div class="section"><h2>Calendar</h2><div class="cal">${cal}</div></div>
+    <div class="section">
+      <div class="dayhead"><h2>${DOW[dowOf(d)]} ${d} ${MONTHNAME}</h2>
+        <span class="pill c-${info(myc).cls}">${esc(info(myc).label)}</span></div>
+      <div class="crew">${crew}</div>
+    </div>
+  </div>
+  <div class="section up"><h2>${TODAY ? "Next 7 days" : "First 7 days"}</h2><ul class="uplist">${up}</ul></div>`;
+}
+
+app.addEventListener("click", e=>{
+  const dayBtn = e.target.closest("[data-day]");
+  if(dayBtn){ state.day = +dayBtn.dataset.day; render(); return; }
+  const nameBtn = e.target.closest("[data-name]");
+  if(nameBtn){ choose(nameBtn.dataset.name); window.scrollTo({top:0,behavior:"smooth"}); }
+});
+
+render();
+loadDefault();
+</script>
+</body>
+</html>
