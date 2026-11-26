@@ -2,7 +2,8 @@
   "months": [
     {
       "key": "2026-11",
-      "path": "roster.xlsx"
+      "path": "rosters/2026-11.xlsx",
+      "updated": "2026-11-26T09:35:56.761Z"
     },
     {
       "key": "2026-12",
